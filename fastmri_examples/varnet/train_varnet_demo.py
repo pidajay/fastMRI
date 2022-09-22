@@ -43,7 +43,7 @@ def cli_main(args):
         sample_rate=args.sample_rate,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        distributed_sampler=(args.accelerator in ("ddp", "ddp_cpu")),
+        distributed_sampler= args.strategy in ("ddp", "ddp_cpu"),
     )
 
     # ------------
@@ -85,6 +85,7 @@ def build_args():
     backend = "ddp"
     num_gpus = 2 if backend == "ddp" else 1
     batch_size = 1
+    accelerator = "gpu"
 
     # set defaults based on optional directory config
     data_path = fetch_dir("knee_path", path_config)
@@ -149,7 +150,8 @@ def build_args():
     # trainer config
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(
-        gpus=num_gpus,  # number of gpus to use
+        devices=num_gpus,  # number of gpus to use
+        accelerator=accelerator,
         replace_sampler_ddp=False,  # this is necessary for volume dispatch during val
         strategy=backend,  # what distributed version to use
         seed=42,  # random seed
@@ -161,13 +163,14 @@ def build_args():
     args = parser.parse_args()
 
     # configure checkpointing in checkpoint_dir
-    checkpoint_dir = args.default_root_dir / "checkpoints"
-    if not checkpoint_dir.exists():
+    checkpoint_dir = pathlib.Path(args.default_root_dir) / "checkpoints"
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    if not checkpoint_dir.exists() and local_rank == 0:
         checkpoint_dir.mkdir(parents=True)
 
     args.callbacks = [
         pl.callbacks.ModelCheckpoint(
-            dirpath=args.default_root_dir / "checkpoints",
+            dirpath = pathlib.Path(args.default_root_dir) / "checkpoints",
             save_top_k=True,
             verbose=True,
             monitor="validation_loss",
