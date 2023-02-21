@@ -469,7 +469,7 @@ class AnnotatedSliceDataset(SliceDataset):
             num_cols,
         )
 
-        self.annotated_raw_samples = []
+        self.annotated_raw_samples : List[FastMRIRawDataSample]= []
 
         if subsplit not in ("knee", "brain"):
             raise ValueError('subsplit should be either "knee" or "brain"')
@@ -479,68 +479,69 @@ class AnnotatedSliceDataset(SliceDataset):
             )
 
         # download csv file from github using git hash to find certain version
-        annotation_name = f"{subsplit}{annotation_version}.csv"
+        annotation_name = f"{subsplit}{annotation_version}.csv" if annotation_version else f"{subsplit}.csv"
         annotation_path = Path(os.getcwd(), ".annotation_cache", annotation_name)
         if not annotation_path.is_file():
             annotation_path = self.download_csv(
                 annotation_version, subsplit, annotation_path
             )
         annotations_csv = pd.read_csv(annotation_path)
+        print(f"annotation samples: {annotations_csv.head()}")
 
         for raw_sample in self.raw_samples:
-            fname, slice_ind, metadata = raw_sample
-
-            # using filename and slice to find desired annotation
-            annotations_df = annotations_csv[
-                (annotations_csv["file"] == fname.stem)
-                & (annotations_csv["slice"] == slice_ind)
-            ]
-            annotations_list = annotations_df.itertuples(index=True, name="Pandas")
-
-            # if annotation (filename or slice) not found, fill in empty values
-            if len(annotations_df) == 0:
-                annotation = self.get_annotation(True, None)
-                metadata["annotation"] = annotation
-                self.annotated_raw_samples.append(
-                    list([fname, slice_ind, metadata.copy()])
-                )
-
-            elif len(annotations_df) == 1:
-                rows = list(annotations_list)[0]
-                annotation = self.get_annotation(False, rows)
-                metadata["annotation"] = annotation
-                self.annotated_raw_samples.append(
-                    list([fname, slice_ind, metadata.copy()])
-                )
-
+            fname, slice_ind, metadata = raw_sample.fname, raw_sample.slice_ind, raw_sample.metadata
+            
+            # check if this file has a global label by checking annotation of slice 0
+            g_flag, g_annotation = self.check_global_annotation(raw_sample, annotations_csv)
+            if g_flag:
+                metadata["annotation"] = g_annotation
+                new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                self.annotated_raw_samples.append(new_annotated_raw_sample)
             else:
-                # only use the first annotation
-                if multiple_annotation_policy == "first":
+                # using filename and slice to find desired annotation
+                annotations_df = annotations_csv[
+                    (annotations_csv["file"] == fname.stem)
+                    & (annotations_csv["slice"] == slice_ind)
+                ]
+                annotations_list = annotations_df.itertuples(index=True, name="Pandas")
+
+                # if annotation (filename or slice) not found, fill in empty values
+                if len(annotations_df) == 0:
+                    annotation = self.get_annotation(True, None)
+                    metadata["annotation"] = annotation
+                    new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                    self.annotated_raw_samples.append(new_annotated_raw_sample)
+                elif len(annotations_df) == 1:
                     rows = list(annotations_list)[0]
                     annotation = self.get_annotation(False, rows)
                     metadata["annotation"] = annotation
-                    self.annotated_raw_samples.append(
-                        list([fname, slice_ind, metadata.copy()])
-                    )
-
-                # use an annotation at random
-                elif multiple_annotation_policy == "random":
-                    random_number = torch.randint(len(annotations_df) - 1, (1,))
-                    rows = list(annotations_list)[random_number]
-                    annotation = self.get_annotation(False, rows)
-                    metadata["annotation"] = annotation
-                    self.annotated_raw_samples.append(
-                        list([fname, slice_ind, metadata.copy()])
-                    )
-
-                # extend raw samples to have tow copies of the same slice, one for each annotation
-                elif multiple_annotation_policy == "all":
-                    for rows in annotations_list:
+                    new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                    self.annotated_raw_samples.append(new_annotated_raw_sample)
+                else:
+                    # only use the first annotation
+                    if multiple_annotation_policy == "first":
+                        rows = list(annotations_list)[0]
                         annotation = self.get_annotation(False, rows)
                         metadata["annotation"] = annotation
-                        self.annotated_raw_samples.append(
-                            list([fname, slice_ind, metadata.copy()])
-                        )
+                        new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                        self.annotated_raw_samples.append(new_annotated_raw_sample)
+                    # use an annotation at random
+                    elif multiple_annotation_policy == "random":
+                        random_number = torch.randint(len(annotations_df), (1,))
+                        # print(f"{random_number=} {len(annotations_df)=}")
+                        # print(f"{annotations_df=}")
+                        rows = list(annotations_list)[random_number]
+                        annotation = self.get_annotation(False, rows)
+                        metadata["annotation"] = annotation
+                        new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                        self.annotated_raw_samples.append(new_annotated_raw_sample)
+                    # extend raw samples to have tow copies of the same slice, one for each annotation
+                    elif multiple_annotation_policy == "all":
+                        for rows in annotations_list:
+                            annotation = self.get_annotation(False, rows)
+                            metadata["annotation"] = annotation
+                            new_annotated_raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata.copy())
+                            self.annotated_raw_samples.append(new_annotated_raw_sample)
 
     def get_annotation(self, empty_value, row):
         if empty_value is True:
@@ -559,10 +560,10 @@ class AnnotatedSliceDataset(SliceDataset):
                 "fname": str(row.file),
                 "slice": int(row.slice),
                 "study_level": str(row.study_level),
-                "x": int(row.x),
-                "y": 320 - int(row.y) - int(row.height) - 1,
-                "width": int(row.width),
-                "height": int(row.height),
+                "x": int(row.x) if row.x and not np.isnan(row.x) else -1,
+                "y": 320 - int(row.y) - int(row.height) - 1 if row.y and not np.isnan(row.y) else -1,
+                "width": int(row.width) if row.width and not np.isnan(row.width) else -1,
+                "height": int(row.height) if row.height and not np.isnan(row.height) else -1,
                 "label": str(row.label),
             }
         return annotation
@@ -580,3 +581,26 @@ class AnnotatedSliceDataset(SliceDataset):
             for chunk in request.iter_content(1024 * 1024):
                 fh.write(chunk)
         return path
+    
+    def check_global_annotation(self, raw_sample, annotations_csv):
+        # check if this file has a global label by checking annotation of slice 0
+        fname, slice, metadata = raw_sample.fname, 0, raw_sample.metadata
+        # using filename and slice to find desired annotation
+        annotations_df = annotations_csv[
+            (annotations_csv["file"] == fname.stem)
+            & (annotations_csv["slice"] == slice)
+        ]
+        
+        if len(annotations_df) <= 0:
+            return (False, None)
+        else:
+            annotations_list = list(annotations_df.itertuples(index=True, name="Pandas"))
+            rows = list(annotations_list)
+            # shuffle the rows
+            rows = random.sample(rows, len(rows))
+            for row in rows:
+                annotation = self.get_annotation(False, row)
+                if annotation["study_level"] == "Yes":
+                    return (True, annotation)
+            return (False, None)
+        
