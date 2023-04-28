@@ -11,6 +11,7 @@ from typing import Callable, Optional, Union
 
 import pytorch_lightning as pl
 import torch
+import pathlib
 
 import fastmri
 from fastmri.data import CombinedSliceDataset, SliceDataset
@@ -250,7 +251,7 @@ class FastMriDataModule(pl.LightningDataModule):
             if data_partition in ("test", "challenge") and self.test_path is not None:
                 data_path = self.test_path
             else:
-                data_path = self.data_path / f"{self.challenge}_{data_partition}"
+                data_path = pathlib.Path(self.data_path, f"{self.challenge}_{data_partition}")
 
             dataset = SliceDataset(
                 root=data_path,
@@ -290,10 +291,10 @@ class FastMriDataModule(pl.LightningDataModule):
             if self.test_path is not None:
                 test_path = self.test_path
             else:
-                test_path = self.data_path / f"{self.challenge}_test"
+                test_path = pathlib.Path(self.data_path, f"{self.challenge}_test")
             data_paths = [
-                self.data_path / f"{self.challenge}_train",
-                self.data_path / f"{self.challenge}_val",
+                pathlib.Path(self.data_path, f"{self.challenge}_train"),
+                pathlib.Path(self.data_path, f"{self.challenge}_val"),
                 test_path,
             ]
             data_transforms = [

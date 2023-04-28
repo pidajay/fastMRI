@@ -379,6 +379,7 @@ class SliceDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i: int):
         fname, dataslice, metadata = self.raw_samples[i]
+        example = {}
 
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
@@ -395,7 +396,8 @@ class SliceDataset(torch.utils.data.Dataset):
         else:
             sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
 
-        return sample
+        example["image"] = sample
+        return example #sample
 
 
 class AnnotatedSliceDataset(SliceDataset):
