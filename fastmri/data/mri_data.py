@@ -396,9 +396,13 @@ class SliceDataset(torch.utils.data.Dataset):
         else:
             sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
 
-        example["image"] = sample[0]
-        if len(sample) == 2:
-            example["cond_image"] = sample[1]
+        if isinstance(sample, tuple):
+            example["image"] = sample[0]
+            if len(sample) == 2:
+                example["cond_image"] = sample[1]
+        else:
+            example["image"] = sample
+        
         return example #sample
 
 
