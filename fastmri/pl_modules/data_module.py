@@ -14,7 +14,7 @@ import torch
 import pathlib
 
 import fastmri
-from fastmri.data import CombinedSliceDataset, SliceDataset
+from fastmri.data import CombinedSliceDataset, SliceDataset, AnnotatedSliceDataset
 
 
 def worker_init_fn(worker_id):
@@ -253,13 +253,16 @@ class FastMriDataModule(pl.LightningDataModule):
             else:
                 data_path = pathlib.Path(self.data_path, f"{self.challenge}_{data_partition}")
 
-            dataset = SliceDataset(
+            dataset = AnnotatedSliceDataset(
                 root=data_path,
                 transform=data_transform,
                 sample_rate=sample_rate,
                 volume_sample_rate=volume_sample_rate,
                 challenge=self.challenge,
                 use_dataset_cache=self.use_dataset_cache_file,
+                dataset_cache_file="dataset_labelled_cache.pkl",
+                subsplit="brain",
+                multiple_annotation_policy="all",
                 raw_sample_filter=raw_sample_filter,
             )
 
