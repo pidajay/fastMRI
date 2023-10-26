@@ -13,7 +13,6 @@ logs/
 add_all_headers.py
 add_header.py
 *fair_cluster*
-fastmri_dirs.yaml
 dataset_cache.pkl
 .mypy_cache/
 lightning_logs/
@@ -21,3 +20,4 @@ lightning_logs/
 build/
 dist/
 fastmri/_version.py
+mlruns/

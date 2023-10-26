@@ -15,7 +15,8 @@ from fastmri.data.mri_data import fetch_dir
 from fastmri.data.subsample import create_mask_for_mask_type
 from fastmri.data.transforms import VarNetDataTransform
 from fastmri.pl_modules import FastMriDataModule, VarNetModule
-
+import mlflow
+import logging
 
 def cli_main(args):
     pl.seed_everything(args.seed)
@@ -59,6 +60,7 @@ def cli_main(args):
         lr_step_size=args.lr_step_size,
         lr_gamma=args.lr_gamma,
         weight_decay=args.weight_decay,
+        mask_ssim=args.mask_ssim,
     )
 
     # ------------
@@ -145,6 +147,7 @@ def build_args():
         lr_step_size=40,  # epoch at which to decrease learning rate
         lr_gamma=0.1,  # extent to which to decrease learning rate
         weight_decay=0.0,  # weight regularization strength
+        mask_ssim=False,  # mask ssim loss
     )
 
     # trainer config
@@ -193,6 +196,9 @@ def run_cli():
     # ---------------------
     # RUN TRAINING
     # ---------------------
+    logging.basicConfig(level=logging.INFO)
+    logging.info(f"Starting training")
+    mlflow.autolog()
     cli_main(args)
 
 

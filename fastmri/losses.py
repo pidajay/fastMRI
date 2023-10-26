@@ -15,7 +15,7 @@ class SSIMLoss(nn.Module):
     SSIM loss module.
     """
 
-    def __init__(self, win_size: int = 7, k1: float = 0.01, k2: float = 0.03):
+    def __init__(self, win_size: int = 7, k1: float = 0.01, k2: float = 0.03, mask_ssim: bool = False):
         """
         Args:
             win_size: Window size for SSIM calculation.
@@ -28,6 +28,7 @@ class SSIMLoss(nn.Module):
         self.register_buffer("w", torch.ones(1, 1, win_size, win_size) / win_size**2)
         NP = win_size**2
         self.cov_norm = NP / (NP - 1)
+        self.mask_ssim = mask_ssim
 
     def forward(
         self,
@@ -38,6 +39,13 @@ class SSIMLoss(nn.Module):
     ):
         assert isinstance(self.w, torch.Tensor)
 
+        # create a mask for Y with pixels less than 10% of max value
+        if self.mask_ssim:
+            mask = Y > 0.1 * Y.max()
+            # print(f"mask.shape: {mask.shape} mask.dtype: {mask.dtype}")
+            Y = Y * mask
+            X = X * mask
+        
         data_range = data_range[:, None, None, None]
         C1 = (self.k1 * data_range) ** 2
         C2 = (self.k2 * data_range) ** 2

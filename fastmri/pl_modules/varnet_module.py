@@ -14,6 +14,8 @@ from fastmri.data import transforms
 from fastmri.models import VarNet
 
 from .mri_module import MriModule
+import logging
+from distutils.util import strtobool
 
 
 class VarNetModule(MriModule):
@@ -43,6 +45,7 @@ class VarNetModule(MriModule):
         lr_step_size: int = 40,
         lr_gamma: float = 0.1,
         weight_decay: float = 0.0,
+        mask_ssim: bool = False,
         **kwargs,
     ):
         """
@@ -71,6 +74,7 @@ class VarNetModule(MriModule):
         """
         super().__init__(**kwargs)
         self.save_hyperparameters()
+        logging.basicConfig(level=logging.INFO)
 
         self.num_cascades = num_cascades
         self.pools = pools
@@ -90,7 +94,8 @@ class VarNetModule(MriModule):
             pools=self.pools,
         )
 
-        self.loss = fastmri.SSIMLoss()
+        self.mask_ssim = mask_ssim
+        self.loss = fastmri.SSIMLoss(mask_ssim=mask_ssim)
 
     def forward(self, masked_kspace, mask, num_low_frequencies):
         return self.varnet(masked_kspace, mask, num_low_frequencies)
@@ -104,6 +109,12 @@ class VarNetModule(MriModule):
         )
 
         self.log("train_loss", loss)
+        # logging.info(f"Global step: {self.global_step} Applying mask inside loss function")
+        if self.global_step == 0:
+            if self.mask_ssim:
+                logging.info(f"Inside Global step: {self.global_step} Applying mask inside loss function")
+            else:
+                logging.info(f"Inside Global step: {self.global_step} Not applying mask inside loss function")
 
         return loss
 
@@ -215,6 +226,12 @@ class VarNetModule(MriModule):
             default=0.0,
             type=float,
             help="Strength of weight decay regularization",
+        )
+        parser.add_argument(
+            "--mask_ssim",
+            default=False,
+            type=strtobool,
+            help="Whether to used masked SSIM in loss function",
         )
 
         return parser
