@@ -16,6 +16,7 @@ from torchmetrics.metric import Metric
 
 import fastmri
 from fastmri import evaluate
+import logging
 
 
 class DistributedMetricSum(Metric):
@@ -128,6 +129,14 @@ class MriModule(pl.LightningModule):
             maxval = val_logs["max_value"][i].cpu().numpy()
             output = val_logs["output"][i].cpu().numpy()
             target = val_logs["target"][i].cpu().numpy()
+            
+            if self.mask_ssim:
+                if self.global_step == 0:
+                    logging.info(f"Inside mri_module Global step: {self.global_step} Applying mask inside SSIM calculation")
+                # create a mask for target with pixels less than 10% of max value
+                mask = target > 0.1 * np.max(target.flatten())
+                target = target * mask
+                output = output * mask
 
             mse_vals[fname][slice_num] = torch.tensor(
                 evaluate.mse(target, output)
